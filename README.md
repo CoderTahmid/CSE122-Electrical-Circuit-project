@@ -64,7 +64,7 @@ This approach allows precise control of heater behavior while maintaining circui
 ---
 
 ## 🛠️ Hardware Implementation (Breadboard Setup)
-![Breadboard Implementation of the CO Monitoring System](PracticalCircuit2.jpg)
+![Breadboard Implementation of the CO Monitoring System](PracticalCircuit1.jpg)[](PracticalCircuit2.jpg)
 
 ---
 
@@ -167,6 +167,12 @@ The report includes:
 
 ---
 
+## 📄 License
+
+This project is released under the **[MIT License](LICENSE)**.
+
+---
+
 ## 📎 Notes
 - This repository focuses on **system-level understanding and implementation**
 - Detailed derivations and experimental analysis are intentionally kept in the project report
@@ -180,5 +186,3 @@ The report includes:
 ✔ Documented  
 
 ---
-
-
