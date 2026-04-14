@@ -2,6 +2,15 @@
 #define HEATER_PIN 25 // MOSFET gate (GPIO 25)
 #define SENSOR_PIN 34 // AO (GPIO 34, ADC1_CH6)
 
+#define BLYNK_TEMPLATE_ID "TMPL6FJheECyD"
+#define BLYNK_TEMPLATE_NAME "MQ7 Sensor Data Reading 2"
+#define BLYNK_AUTH_TOKEN "IVsfjTkC7r_DmqEn9eanvcOd7YgCEvwk"
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+char ssid[] = "Redmi Note 14";
+char pass[] = "kuttargu";
+
 #include <math.h>
 
 float RL = 10000.0; // Load resistor on your MQ-7 board (10k typical)
@@ -31,11 +40,14 @@ void setup()
   Serial.begin(115200);
   delay(100);
 
-  // ADC attenuation for near 3.3V range (use ADC_11db for max range)
+  // Connect to WiFi and Blynk
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  // ADC attenuation for near 3.3V range
   analogSetPinAttenuation(SENSOR_PIN, ADC_11db);
 
-  ledcSetup(pwmChannel, pwmFreq, pwmRes);
-  ledcAttachPin(HEATER_PIN, pwmChannel);
+  // PWM setup for ESP32 Core v3.x
+  ledcAttach(HEATER_PIN, pwmFreq, pwmRes);
 
   Serial.println();
   Serial.println("=== MQ-7 ESP32: Corrected timing cycle ===");
@@ -45,10 +57,10 @@ void setup()
 
 void loop()
 {
+  Blynk.run();
   unsigned long phaseStart;
-
   // --- FULL POWER PHASE (5V) ---
-  ledcWrite(pwmChannel, dutyFull);
+  ledcWrite(HEATER_PIN, dutyFull);
   Serial.println(">>> PHASE START: FULL POWER (5V) — 60s");
   phaseStart = millis();
   while (millis() - phaseStart < FULL_MS)
@@ -60,7 +72,7 @@ void loop()
   Serial.println();
 
   // --- LOW POWER PHASE (~1.4V avg) ---
-  ledcWrite(pwmChannel, dutyLow);
+  ledcWrite(HEATER_PIN, dutyLow);
   Serial.println(">>> PHASE START: LOW POWER (~1.4V) — 90s");
   phaseStart = millis();
   while (millis() - phaseStart < LOW_MS)
@@ -72,7 +84,7 @@ void loop()
   Serial.println();
 
   // --- QUICK FULL POWER READ ---
-  ledcWrite(pwmChannel, dutyFull);
+  ledcWrite(HEATER_PIN, dutyFull);
   delay(QUICK_MS); // 50 ms as required
   Serial.println(">>> QUICK FULL POWER READ");
   printSingleReading("quick-read");
@@ -81,13 +93,16 @@ void loop()
 }
 
 // Wait up to 'ms' but stop earlier if untilTimeMillis reached
+
 void waitMsOrUntil(unsigned long ms, unsigned long untilTimeMillis)
 {
   unsigned long end = millis() + ms;
   if (end > untilTimeMillis)
     end = untilTimeMillis;
+
   while (millis() < end)
   {
+    Blynk.run();
     delay(10);
   }
 }
@@ -125,28 +140,37 @@ void printSingleReading(const char *tag)
 
 void printReading(int raw, float vout, float rs, float ppm)
 {
+  float sendValue = ppm;
+
   if (raw == 0)
   {
-    Serial.println("Raw=0 | Vout=0.000V | Rs=inf | PPM=N/A  <-- ADC=0 (AO disconnected or sensor unpowered)");
-    return;
+    Serial.println("Raw=0 | Vout=0.000V | Rs=inf | PPM=N/A");
+    sendValue = 0;
   }
-  if (raw >= 4095)
+  else if (raw >= 4095)
   {
-    Serial.println("Raw=4095 | Vout~3.300V | Rs~0 | PPM=ovf  <-- ADC saturation (AO > ADC range)");
-    return;
+    Serial.println("Raw=4095 | Vout~3.300V | Rs~0 | PPM=ovf");
+    sendValue = 0;
+  }
+  else if (!isfinite(ppm) || ppm <= 0.0)
+  {
+    Serial.println("Invalid PPM");
+    sendValue = 0;
+  }
+  else
+  {
+    Serial.print("Raw=");
+    Serial.print(raw);
+    Serial.print(" | Vout=");
+    Serial.print(vout, 3);
+    Serial.print(" V | Rs=");
+    Serial.print(rs, 1);
+    Serial.print(" ohm | PPM=");
+    Serial.println(ppm, 2);
   }
 
-  Serial.print("Raw=");
-  Serial.print(raw);
-  Serial.print(" | Vout=");
-  Serial.print(vout, 3);
-  Serial.print(" V | Rs=");
-  Serial.print(rs, 1);
-  Serial.print(" ohm | PPM=");
-  if (!isfinite(ppm) || ppm <= 0.0)
-    Serial.println("N/A");
-  else
-    Serial.println(ppm, 2);
+  // Send data to Blynk Cloud
+  Blynk.virtualWrite(V0, sendValue);
 }
 
 // --- ADC helpers ---
